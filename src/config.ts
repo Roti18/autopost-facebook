@@ -30,12 +30,24 @@ export function resolveSpintax(text: string): string {
 // Default values
 const DEFAULT_POST_CONTENT = '{Halo|Hi|Permisi|Selamat pagi/siang} teman-teman! {Semoga hari Anda menyenangkan.|Semoga lancar usahanya.|Salam sukses!}';
 
+const getPostContent = (): string => {
+  const templatePath = path.resolve(process.env.POST_TEMPLATE_PATH || 'post_template.txt');
+  if (fs.existsSync(templatePath)) {
+    try {
+      return fs.readFileSync(templatePath, 'utf8');
+    } catch (err) {
+      console.error('Error reading post template file:', err);
+    }
+  }
+  return DEFAULT_POST_CONTENT;
+};
+
 export const config: BotConfig = {
   userDataDir: path.resolve(process.env.FB_USER_DATA_DIR || 'user_data'),
   headless: process.env.HEADLESS === 'true',
   minDelaySeconds: parseInt(process.env.MIN_DELAY_SECONDS || '60', 10),
   maxDelaySeconds: parseInt(process.env.MAX_DELAY_SECONDS || '180', 10),
-  postContent: process.env.POST_CONTENT || DEFAULT_POST_CONTENT,
+  postContent: getPostContent(),
   imagePath: process.env.IMAGE_PATH ? path.resolve(process.env.IMAGE_PATH) : null,
   postIntervalMinutes: parseInt(process.env.POST_INTERVAL_MINUTES || '60', 10),
 };
