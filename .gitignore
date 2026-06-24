@@ -1,0 +1,8 @@
+node_modules/
+dist/
+user_data/
+facebook.db
+facebook.db-journal
+.env
+*.log
+FAP-FacebookAutoPoster/
