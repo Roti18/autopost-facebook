@@ -13,6 +13,30 @@ import {
 } from './db';
 
 /**
+ * Load login credentials from config.json
+ */
+function loadLoginCredentials(): { email: string; password: string } | null {
+  const configPath = path.resolve(process.cwd(), 'config.json');
+  if (!fs.existsSync(configPath)) {
+    console.warn('config.json not found. Auto-fill login will be skipped.');
+    return null;
+  }
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const creds = JSON.parse(raw);
+    if (creds.email && creds.password) {
+      return { email: creds.email, password: creds.password };
+    }
+    console.warn('config.json is missing email or password fields.');
+    return null;
+  } catch (err) {
+    console.error('Failed to parse config.json:', err);
+    return null;
+  }
+}
+
+
+/**
  * Utility function to sleep for a specified duration in milliseconds.
  */
 function sleep(ms: number): Promise<void> {
@@ -130,9 +154,37 @@ async function main() {
     if (isLoginScreen && !isLogged) {
       console.log('\n===============================================================');
       console.log('WARNING: Facebook session not found or expired.');
-      console.log('Please log in manually in the browser window.');
-      console.log('The bot will wait for you to complete login in the GUI...');
+      console.log('Attempting auto-fill from config.json...');
       console.log('===============================================================\n');
+
+      // --- Auto-fill email & password from config.json ---
+      const creds = loadLoginCredentials();
+      if (creds) {
+        try {
+          // Fill email
+          const emailInput = page.locator('input#email, input[name="email"]').first();
+          if (await emailInput.isVisible()) {
+            await emailInput.fill('');
+            await emailInput.type(creds.email, { delay: 80 });
+            console.log('Auto-filled email from config.json.');
+          }
+
+          // Fill password
+          const passInput = page.locator('input#pass, input[name="pass"], input[type="password"]').first();
+          if (await passInput.isVisible()) {
+            await passInput.fill('');
+            await passInput.type(creds.password, { delay: 80 });
+            console.log('Auto-filled password from config.json.');
+          }
+
+          console.log('\n>>> Credentials filled. Please solve the CAPTCHA / checkpoint manually in the browser, then login will proceed automatically. <<<\n');
+        } catch (fillErr) {
+          console.error('Error during auto-fill:', fillErr);
+          console.log('Please log in manually in the browser window.');
+        }
+      } else {
+        console.log('No credentials in config.json. Please log in manually in the browser window.');
+      }
 
       let loggedIn = false;
       const maxRetries = 180; // 15 minutes wait limit to give plenty of time for captcha

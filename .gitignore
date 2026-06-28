@@ -6,3 +6,4 @@ facebook.db-journal
 .env
 *.log
 FAP-FacebookAutoPoster/
+config.json

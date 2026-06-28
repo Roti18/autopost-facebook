@@ -48,6 +48,15 @@ A Node.js and TypeScript automation script designed to post content to multiple 
    ]
    ```
 
+4. Create a `config.json` file in the root directory with your Facebook login credentials:
+   ```json
+   {
+     "email": "your_email_or_phone",
+     "password": "your_password"
+   }
+   ```
+   > **Note:** `config.json` is listed in `.gitignore` and will never be committed to version control. Keep it safe and do not share it.
+
 ## How to Run
 
 1. Start the bot runner:
@@ -55,8 +64,7 @@ A Node.js and TypeScript automation script designed to post content to multiple 
    npm start
    ```
 
-2. Perform the initial manual login:
-   * During the first execution, a Chromium browser window will open.
-   * Log in manually to your Facebook account and complete any security checkpoints or CAPTCHAs if prompted.
-   * Once you are on the Facebook home feed, the bot will automatically detect the active session, save it to the session directory, and begin posting to your list of groups.
-   * On subsequent runs, the bot will reuse this session and bypass the login step entirely.
+2. Login behavior:
+   * **Session still valid:** The bot detects the saved session and starts posting immediately — no action needed.
+   * **Session expired / first run:** The bot automatically fills in the email and password from `config.json` into the Facebook login form. You only need to **solve the CAPTCHA or security checkpoint manually** in the browser window. Once you complete it and land on the home feed, the bot resumes posting automatically.
+   * On subsequent runs after a successful login, the bot reuses the saved session and skips the login step entirely.
