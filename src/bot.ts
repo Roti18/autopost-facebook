@@ -44,11 +44,54 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Instantly inserts post content into the editor (similar to paste).
+ * Instantly inserts post content into the Lexical editor.
+ * Facebook uses Lexical which handles newlines via Enter key (creating <p> tags).
  */
 async function pasteContent(page: Page, locator: Locator, text: string) {
   await locator.focus();
-  await page.keyboard.insertText(text);
+  await sleep(500);
+
+  // Click the inner <p> to place cursor properly inside Lexical editor
+  const innerP = locator.locator('p').first();
+  if (await innerP.isVisible().catch(() => false)) {
+    await innerP.click({ position: { x: 5, y: 5 }, force: true });
+  } else {
+    await locator.click({ force: true });
+  }
+  await sleep(500);
+
+  // Clear any existing content first
+  await page.keyboard.press('Control+a');
+  await sleep(100);
+  await page.keyboard.press('Delete');
+  await sleep(300);
+
+  // Split text into lines and type each line + Enter for newline
+  // Lexical needs real Enter keypresses to create proper <p> paragraph breaks
+  const lines = text.split('\n');
+  console.log(`Typing ${lines.length} lines into Lexical editor...`);
+
+  for (let i = 0; i < lines.length; i++) {
+    // Trim the line to avoid extra whitespace issues
+    const line = lines[i].trimEnd();
+    if (line.length > 0) {
+      await page.keyboard.type(line, { delay: 10 });
+    }
+
+    // Press Enter after each line except the last one
+    if (i < lines.length - 1) {
+      // If the original line was empty, we just press Enter (blank paragraph)
+      if (line.length === 0) {
+        await page.keyboard.press('Enter');
+        await sleep(50);
+      } else {
+        await page.keyboard.press('Enter');
+        await sleep(80);
+      }
+    }
+  }
+
+  console.log('Text typed successfully!');
 }
 
 /**
@@ -281,64 +324,77 @@ async function main() {
           throw new Error('Could not find the "Tulis sesuatu..." button on group page. Are you a member or is the page format different?');
         }
 
-        console.log('Opening post creation dialog...');
+        console.log('Opening post composer...');
         await writeBtn.click();
-        
-        // Wait for dialog box to appear
-        const dialog = page.locator('div[role="dialog"]').first();
-        await dialog.waitFor({ state: 'visible', timeout: 15000 });
 
-        // Locate text input box
-        console.log('Locating text editor...');
-        const textBox = dialog.locator('div[contenteditable="true"][role="textbox"]').first();
-        await textBox.waitFor({ state: 'visible', timeout: 10000 });
+        // Give time for inline composer to render
+        await sleep(3000);
+
+        // Facebook uses inline composer with a specific placeholder.
+        // CRITICAL: Must target the GROUP composer, not a comment reply box!
+        // Comment editors also have contenteditable="true" role="textbox"
+        // but they have different aria-placeholder values.
+        console.log('Locating group post composer (targeting aria-placeholder="Buat postingan publik...")...');
+        const textBox = page.locator(
+          'div[contenteditable="true"][role="textbox"][aria-placeholder*="Buat postingan"], ' +
+          'div[contenteditable="true"][role="textbox"][aria-placeholder*="Write a public"], ' +
+          'div[contenteditable="true"][role="textbox"][aria-placeholder*="public"], ' +
+          'div[contenteditable="true"][role="textbox"][aria-placeholder*="postingan"]'
+        ).first();
+        await textBox.waitFor({ state: 'visible', timeout: 15000 });
+        console.log('Post composer located successfully (NOT a comment editor).');
 
         // Resolve Spintax for post content
         const postText = resolveSpintax(config.postContent);
         console.log(`Resolved post caption:\n"${postText}"`);
 
-        // Paste post content instantly
-        console.log('Pasting post caption...');
-        await pasteContent(page, textBox, postText);
-        await sleep(1500);
-
-        // Upload image if configured
+        // ----- UPLOAD IMAGE FIRST (before text) -----
+        // Upload image first so any composer re-render from the upload
+        // doesn't wipe out the text we already typed.
         if (config.imagePath) {
           if (fs.existsSync(config.imagePath)) {
             console.log(`Uploading media file: ${config.imagePath}`);
-            const fileInput = dialog.locator('input[type="file"]').first();
-            const mediaBtn = dialog.locator('div[aria-label="Foto/video"][role="button"], div[aria-label="Photo/video"][role="button"]').first();
+            const mediaBtn = page.locator('div[aria-label="Foto/video"][role="button"], div[aria-label="Photo/video"][role="button"], div[aria-label="Add photo/video"][role="button"]').first();
 
-            if (await fileInput.count() > 0) {
-              await fileInput.setInputFiles(config.imagePath);
-            } else if (await mediaBtn.isVisible()) {
-              try {
-                const [fileChooser] = await Promise.all([
-                  page.waitForEvent('filechooser', { timeout: 4000 }).catch(() => null),
-                  mediaBtn.click()
-                ]);
-                if (fileChooser) {
-                  await fileChooser.setFiles(config.imagePath);
-                } else {
-                  await dialog.locator('input[type="file"]').first().setInputFiles(config.imagePath);
-                }
-              } catch (fileErr) {
-                console.log('File chooser click timeout or error. Attempting direct setInputFiles...');
+            try {
+              const [fileChooser] = await Promise.all([
+                page.waitForEvent('filechooser', { timeout: 5000 }).catch(() => null),
+                mediaBtn.click()
+              ]);
+              if (fileChooser) {
+                await fileChooser.setFiles(config.imagePath);
+              } else {
                 await page.setInputFiles('input[type="file"]', config.imagePath);
               }
-            } else {
-              // Try global selector fallback
+            } catch (fileErr) {
+              console.log('Media button click failed. Trying direct file input...');
               await page.setInputFiles('input[type="file"]', config.imagePath);
             }
 
-            console.log('Waiting 5s for media upload preview...');
+            console.log('Waiting 5s for media upload preview to stabilize...');
             await sleep(5000);
           } else {
             console.warn(`Warning: Configuration specified imagePath "${config.imagePath}" but the file does not exist.`);
           }
         }
 
-        // Locate "Posting" (Submit) button
+        // ----- NOW INSERT TEXT (after image upload is stable) -----
+        // Re-locate the text editor after image upload (may have been re-rendered)
+        console.log('Re-locating post composer after image upload...');
+        const textBoxAfterUpload = page.locator(
+          'div[contenteditable="true"][role="textbox"][aria-placeholder*="Buat postingan"], ' +
+          'div[contenteditable="true"][role="textbox"][aria-placeholder*="Write a public"], ' +
+          'div[contenteditable="true"][role="textbox"][aria-placeholder*="public"], ' +
+          'div[contenteditable="true"][role="textbox"][aria-placeholder*="postingan"]'
+        ).first();
+        await textBoxAfterUpload.waitFor({ state: 'visible', timeout: 10000 });
+
+        // Paste post content
+        console.log('Pasting post caption...');
+        await pasteContent(page, textBoxAfterUpload, postText);
+        await sleep(1500);
+
+        // Locate "Posting" (Submit) button on the page (not inside a dialog)
         console.log('Locating Posting submit button...');
         const postBtnSelectors = [
           'div[aria-label="Posting"][role="button"]',
@@ -349,7 +405,7 @@ async function main() {
 
         let postBtn: Locator | null = null;
         for (const selector of postBtnSelectors) {
-          const loc = dialog.locator(selector).first();
+          const loc = page.locator(selector).first();
           if (await loc.isVisible() && await loc.isEnabled()) {
             postBtn = loc;
             break;
@@ -357,16 +413,62 @@ async function main() {
         }
 
         if (!postBtn) {
-          throw new Error('Could not find the "Posting" button in composer dialog.');
+          throw new Error('Could not find the "Posting" button on the page.');
         }
 
         console.log('Submitting post...');
         await postBtn.click();
 
-        // Wait until post modal closes (indicator of success)
-        console.log('Waiting for modal to close (confirming upload completion)...');
-        await dialog.waitFor({ state: 'hidden', timeout: 35000 });
-        console.log('Success! Modal closed.');
+        // Verify post was actually submitted — wait for the composer to go away
+        // AND the "Tulis sesuatu..." button to reappear
+        console.log('Waiting for post to complete...');
+        await sleep(3000);
+
+        let postSuccess = false;
+        for (let retry = 0; retry < 20; retry++) {
+          // Check if text editor is gone (composer closed = post submitted)
+          const editorVisible = await textBoxAfterUpload.isVisible().catch(() => false);
+          if (!editorVisible) {
+            postSuccess = true;
+            break;
+          }
+
+          // Check if "Tulis sesuatu..." reappeared (indicates composer reset)
+          const writeReappeared = await page.locator('span:has-text("Tulis sesuatu...")').first().isVisible().catch(() => false);
+          if (writeReappeared) {
+            postSuccess = true;
+            break;
+          }
+
+          await sleep(2000);
+        }
+
+        if (!postSuccess) {
+          // One more check — maybe the post went through but composer didn't close
+          // Check if the editor content is now empty (was submitted)
+          const editorText = await textBoxAfterUpload.evaluate(el => el.textContent?.trim() || '').catch(() => '');
+          if (editorText === '') {
+            postSuccess = true;
+          } else {
+            // Try clicking Posting button again just in case
+            console.log('Post may not have gone through. Trying to click Posting again...');
+            const postBtnAgain = page.locator('div[aria-label="Posting"][role="button"], div[aria-label="Post"][role="button"]').first();
+            if (await postBtnAgain.isVisible().catch(() => false)) {
+              await postBtnAgain.click();
+              await sleep(5000);
+              const stillVisible = await postBtnAgain.isVisible().catch(() => false);
+              if (!stillVisible) {
+                postSuccess = true;
+              }
+            }
+          }
+        }
+
+        if (!postSuccess) {
+          throw new Error('Post submission failed — composer did not close after clicking Posting.');
+        }
+
+        console.log('Post submitted successfully! Composer confirmed closed.');
 
         // Update DB
         const nowIso = new Date().toISOString();
