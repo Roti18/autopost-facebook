@@ -23,7 +23,9 @@ function loadLoginCredentials(): { email: string; password: string } | null {
   }
   try {
     const raw = fs.readFileSync(configPath, 'utf8');
-    const creds = JSON.parse(raw);
+    // Strip BOM if present
+    const cleaned = raw.replace(/^﻿/, '');
+    const creds = JSON.parse(cleaned);
     if (creds.email && creds.password) {
       return { email: creds.email, password: creds.password };
     }
