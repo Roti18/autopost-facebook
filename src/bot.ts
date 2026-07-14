@@ -155,6 +155,7 @@ async function main() {
     const loginSelectors = [
       'input#email',
       'input[name="email"]',
+      'input[type="password"]',
       'button[name="login"]',
       'a[data-testid="open-registration-form-button"]'
     ];
@@ -163,7 +164,6 @@ async function main() {
       '[role="navigation"]',
       'input[placeholder*="Cari"]',
       'input[placeholder*="Search"]',
-      '[aria-label="Facebook"]',
       'a[href*="/me/"]',
       'div[aria-label="Akun"]'
     ];
@@ -172,10 +172,10 @@ async function main() {
     let isLoginScreen = false;
 
     // Polling to identify current page state
-    for (let attempts = 0; attempts < 16; attempts++) {
+    for (let attempts = 0; attempts < 30; attempts++) {
       // Check for logged in elements
       for (const sel of loggedInSelectors) {
-        if (await page.locator(sel).first().isVisible()) {
+        if (await page.locator(sel).first().isVisible().catch(() => false)) {
           isLogged = true;
           break;
         }
@@ -184,37 +184,52 @@ async function main() {
 
       // Check for login fields
       for (const sel of loginSelectors) {
-        if (await page.locator(sel).first().isVisible()) {
+        if (await page.locator(sel).first().isVisible().catch(() => false)) {
           isLoginScreen = true;
           break;
         }
       }
       if (isLoginScreen) break;
 
+      // Check URL as fallback — sometimes Facebook redirects without showing form immediately
+      const currentUrl = page.url();
+      if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
+        isLoginScreen = true;
+        break;
+      }
+
       await sleep(500);
     }
 
-    if (isLoginScreen && !isLogged) {
+    // Final fallback: re-check URL if polling ended inconclusive
+    if (!isLogged && !isLoginScreen) {
+      const finalUrl = page.url();
+      if (finalUrl.includes('login.php') || finalUrl.includes('checkpoint')) {
+        isLoginScreen = true;
+        console.log('Detected login page from URL fallback.');
+      }
+    }
+
+    // ----- LOGIN HANDLER -----
+    // Reusable: waits for login completion, fills creds, waits up to 15 min
+    async function handleLoginScreen() {
       console.log('\n===============================================================');
       console.log('WARNING: Facebook session not found or expired.');
       console.log('Attempting auto-fill from config.json...');
       console.log('===============================================================\n');
 
-      // --- Auto-fill email & password from config.json ---
       const creds = loadLoginCredentials();
       if (creds) {
         try {
-          // Fill email
           const emailInput = page.locator('input#email, input[name="email"]').first();
-          if (await emailInput.isVisible()) {
+          if (await emailInput.isVisible().catch(() => false)) {
             await emailInput.fill('');
             await emailInput.type(creds.email, { delay: 80 });
             console.log('Auto-filled email from config.json.');
           }
 
-          // Fill password
           const passInput = page.locator('input#pass, input[name="pass"], input[type="password"]').first();
-          if (await passInput.isVisible()) {
+          if (await passInput.isVisible().catch(() => false)) {
             await passInput.fill('');
             await passInput.type(creds.password, { delay: 80 });
             console.log('Auto-filled password from config.json.');
@@ -230,49 +245,55 @@ async function main() {
       }
 
       let loggedIn = false;
-      const maxRetries = 180; // 15 minutes wait limit to give plenty of time for captcha
+      const maxRetries = 180;
       let retries = 0;
 
       while (!loggedIn && retries < maxRetries) {
         await sleep(5000);
         retries++;
-        
-        // Check if logged in selectors became visible
+
         let feedVisible = false;
         for (const sel of loggedInSelectors) {
-          if (await page.locator(sel).first().isVisible()) {
+          if (await page.locator(sel).first().isVisible().catch(() => false)) {
             feedVisible = true;
             break;
           }
         }
 
-        // We ONLY mark loggedIn as true if the feed/home indicators are fully visible!
-        // This gives the user all the time they need to solve captchas/checkpoints.
         if (feedVisible) {
           loggedIn = true;
         } else {
           const currentUrl = page.url();
           if (currentUrl.includes('checkpoint') || currentUrl.includes('captcha')) {
-            if (retries % 3 === 0) {
-              console.log('Bot status: Waiting for security checkpoint/CAPTCHA to be solved manually...');
-            }
+            if (retries % 3 === 0) console.log('Bot status: Waiting for security checkpoint/CAPTCHA to be solved manually...');
           } else {
-            if (retries % 3 === 0) {
-              console.log('Bot status: Waiting for manual login completion...');
-            }
+            if (retries % 3 === 0) console.log('Bot status: Waiting for manual login completion...');
           }
         }
       }
 
-      if (!loggedIn) {
-        throw new Error('Login wait timeout exceeded. Exiting bot.');
-      }
+      if (!loggedIn) throw new Error('Login wait timeout exceeded. Exiting bot.');
       console.log('Login detected successfully! Re-routing to start queue...');
       await sleep(3000);
-    } else if (isLogged) {
+    }
+
+    if (isLogged) {
       console.log('Facebook session loaded successfully! (Logged in state verified)');
     } else {
-      console.log('Could not identify login state clearly. Proceeding with existing session context...');
+      // If we didn't flag login screen yet, do final fallback checks
+      if (!isLoginScreen) {
+        const passVisible = await page.locator('input[type="password"]').first().isVisible().catch(() => false);
+        if (passVisible) {
+          console.log('Password field detected — treating as login screen.');
+          isLoginScreen = true;
+        }
+      }
+
+      if (isLoginScreen) {
+        await handleLoginScreen();
+      } else {
+        console.log('Could not identify login state clearly. Proceeding with existing session context...');
+      }
     }
 
     // 2. Loop Through Active Groups
