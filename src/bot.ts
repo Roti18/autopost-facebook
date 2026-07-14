@@ -447,12 +447,13 @@ async function main() {
         const postText = resolveSpintax(config.postContent);
         console.log(`Resolved post caption:\n"${postText}"`);
 
-        // ----- UPLOAD IMAGE FIRST (before text) -----
+        // ----- UPLOAD IMAGE(S) FIRST (before text) -----
         // Upload image first so any composer re-render from the upload
         // doesn't wipe out the text we already typed.
-        if (config.imagePath) {
-          if (fs.existsSync(config.imagePath)) {
-            console.log(`Uploading media file: ${config.imagePath}`);
+        if (config.imagePaths.length > 0) {
+          const existingImages = config.imagePaths.filter(p => fs.existsSync(p));
+          if (existingImages.length > 0) {
+            console.log(`Uploading media file(s): ${existingImages.join(', ')}`);
             const mediaBtn = page.locator('div[aria-label="Foto/video"][role="button"], div[aria-label="Photo/video"][role="button"], div[aria-label="Add photo/video"][role="button"]').first();
 
             try {
@@ -461,19 +462,19 @@ async function main() {
                 mediaBtn.click()
               ]);
               if (fileChooser) {
-                await fileChooser.setFiles(config.imagePath);
+                await fileChooser.setFiles(existingImages);
               } else {
-                await page.setInputFiles('input[type="file"]', config.imagePath);
+                await page.setInputFiles('input[type="file"]', existingImages);
               }
             } catch (fileErr) {
               console.log('Media button click failed. Trying direct file input...');
-              await page.setInputFiles('input[type="file"]', config.imagePath);
+              await page.setInputFiles('input[type="file"]', existingImages);
             }
 
             console.log('Waiting 5s for media upload preview to stabilize...');
             await sleep(5000);
           } else {
-            console.warn(`Warning: Configuration specified imagePath "${config.imagePath}" but the file does not exist.`);
+            console.warn(`Warning: None of the configured images exist: ${config.imagePaths.join(', ')}`);
           }
         }
 

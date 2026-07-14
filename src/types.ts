@@ -21,6 +21,6 @@ export interface BotConfig {
   minDelaySeconds: number;
   maxDelaySeconds: number;
   postContent: string;
-  imagePath: string | null;
+  imagePaths: string[];
   postIntervalMinutes: number;
 }

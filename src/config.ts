@@ -48,7 +48,9 @@ export const config: BotConfig = {
   minDelaySeconds: parseInt(process.env.MIN_DELAY_SECONDS || '60', 10),
   maxDelaySeconds: parseInt(process.env.MAX_DELAY_SECONDS || '180', 10),
   postContent: getPostContent(),
-  imagePath: process.env.IMAGE_PATH ? path.resolve(process.env.IMAGE_PATH) : null,
+  imagePaths: process.env.IMAGE_PATH
+    ? process.env.IMAGE_PATH.split(',').map(p => path.resolve(p.trim())).filter((p, i, a) => a.indexOf(p) === i)
+    : [],
   postIntervalMinutes: parseInt(process.env.POST_INTERVAL_MINUTES || '60', 10),
 };
 
