@@ -157,6 +157,9 @@ async function main() {
       'input[name="email"]',
       'input[type="password"]',
       'button[name="login"]',
+      'button:has-text("Continue")',
+      'button:has-text("Log in")',
+      'button:has-text("Masuk")',
       'a[data-testid="open-registration-form-button"]'
     ];
 
@@ -221,6 +224,7 @@ async function main() {
       const creds = loadLoginCredentials();
       if (creds) {
         try {
+          // Step 1: Fill email
           const emailInput = page.locator('input#email, input[name="email"]').first();
           if (await emailInput.isVisible().catch(() => false)) {
             await emailInput.fill('');
@@ -228,6 +232,20 @@ async function main() {
             console.log('Auto-filled email from config.json.');
           }
 
+          // Step 2: Click "Continue" / "Log in" button (FB new flow)
+          const continueBtn = page.locator(
+            'button:has-text("Continue"), ' +
+            'button:has-text("Log in"), ' +
+            'button:has-text("Masuk"), ' +
+            'button[name="login"]'
+          ).first();
+          if (await continueBtn.isVisible().catch(() => false)) {
+            await continueBtn.click();
+            console.log('Clicked Continue/Login button.');
+            await sleep(2000); // Wait for password form to appear
+          }
+
+          // Step 3: Fill password (now should be visible)
           const passInput = page.locator('input#pass, input[name="pass"], input[type="password"]').first();
           if (await passInput.isVisible().catch(() => false)) {
             await passInput.fill('');
@@ -235,7 +253,18 @@ async function main() {
             console.log('Auto-filled password from config.json.');
           }
 
-          console.log('\n>>> Credentials filled. Please solve the CAPTCHA / checkpoint manually in the browser, then login will proceed automatically. <<<\n');
+          // Step 4: Click login if password form submitted
+          const loginBtn = page.locator(
+            'button:has-text("Log in"), ' +
+            'button:has-text("Masuk"), ' +
+            'button[name="login"]'
+          ).first();
+          if (await loginBtn.isVisible().catch(() => false)) {
+            await loginBtn.click();
+            console.log('Clicked final login button.');
+          }
+
+          console.log('\n>>> Credentials filled. Please solve the CAPTCHA / checkpoint manually in the browser if any. <<<\n');
         } catch (fillErr) {
           console.error('Error during auto-fill:', fillErr);
           console.log('Please log in manually in the browser window.');
