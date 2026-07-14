@@ -286,7 +286,11 @@ async function main() {
             const loginBtn = page.locator(
               'button:has-text("Log in"), ' +
               'button:has-text("Masuk"), ' +
-              'button[name="login"]'
+              'button[name="login"], ' +
+              'div[aria-label="Log in"], ' +
+              'div[aria-label="Masuk"], ' +
+              'div[role="button"]:has-text("Log in"), ' +
+              'div[role="button"]:has-text("Masuk")'
             ).first();
             if (await loginBtn.isVisible().catch(() => false)) {
               await loginBtn.click();
