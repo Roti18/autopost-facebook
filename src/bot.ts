@@ -23,9 +23,8 @@ function loadLoginCredentials(): { email: string; password: string } | null {
   }
   try {
     const raw = fs.readFileSync(configPath, 'utf8');
-    // Strip BOM if present
-    const cleaned = raw.replace(/^﻿/, '');
-    const creds = JSON.parse(cleaned);
+    // Strip BOM (U+FEFF) if present — common from Windows Notepad
+    const creds = JSON.parse(raw.replace(/^﻿/, ''));
     if (creds.email && creds.password) {
       return { email: creds.email, password: creds.password };
     }
