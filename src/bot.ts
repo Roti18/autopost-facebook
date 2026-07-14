@@ -297,9 +297,8 @@ async function main() {
       try {
         console.log('Navigating to group URL...');
         await page.goto(group.group_url, { waitUntil: 'domcontentloaded' });
-        await sleep(5000); // Allow FB DOM to hydrate
 
-        // Locate "Tulis sesuatu..." (Write something...) button
+        // Locate "Tulis sesuatu..." (Write something...) button with retry logic
         console.log('Locating "Write something" button...');
         const writeBtnSelectors = [
           'div.xi81zsa.x1lkfr7t.xkjl1po.x1mzt3pk.xh8yej3.x13faqbe',
@@ -312,11 +311,27 @@ async function main() {
         ];
 
         let writeBtn: Locator | null = null;
-        for (const selector of writeBtnSelectors) {
-          const loc = page.locator(selector).first();
-          if (await loc.isVisible()) {
-            writeBtn = loc;
+        const MAX_BUTTON_RETRIES = 3;
+        for (let attempt = 1; attempt <= MAX_BUTTON_RETRIES; attempt++) {
+          console.log(`  Attempt ${attempt}/${MAX_BUTTON_RETRIES}: checking for composer button...`);
+
+          for (const selector of writeBtnSelectors) {
+            const loc = page.locator(selector).first();
+            if (await loc.isVisible().catch(() => false)) {
+              writeBtn = loc;
+              break;
+            }
+          }
+
+          if (writeBtn) {
+            console.log('  Composer button found!');
             break;
+          }
+
+          if (attempt < MAX_BUTTON_RETRIES) {
+            const waitMs = 4000;
+            console.log(`  Button not visible yet. Waiting ${waitMs / 1000}s before retry...`);
+            await sleep(waitMs);
           }
         }
 
