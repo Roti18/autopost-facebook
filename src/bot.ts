@@ -152,24 +152,33 @@ async function main() {
     await page.goto('https://facebook.com/', { waitUntil: 'domcontentloaded' });
 
     console.log('Checking login status...');
+    // Narrow logged-in selectors — exclude [role="navigation"] because FB login page footer also has nav
+    const loggedInSelectors = [
+      'input[placeholder*="Cari"]',
+      'input[placeholder*="Search"]',
+      'a[href*="/me/"]',
+      'div[aria-label="Akun"]',
+      'div[aria-label="Account"]',
+      '[data-pagelet="left_nav"]'
+    ];
+
+    // Broad login-page selectors — covers old form + new flow (Continue/Lanjutkan buttons)
     const loginSelectors = [
       'input#email',
       'input[name="email"]',
       'input[type="password"]',
       'button[name="login"]',
       'button:has-text("Continue")',
+      'button:has-text("Lanjutkan")',
       'button:has-text("Log in")',
       'button:has-text("Masuk")',
+      'a:has-text("Log in")',
+      'a:has-text("Sign in")',
+      'a:has-text("Masuk")',
       'a[data-testid="open-registration-form-button"]'
     ];
 
-    const loggedInSelectors = [
-      '[role="navigation"]',
-      'input[placeholder*="Cari"]',
-      'input[placeholder*="Search"]',
-      'a[href*="/me/"]',
-      'div[aria-label="Akun"]'
-    ];
+    const loggedInUrlPatterns = ['/me/', '?sk=', '/photos/', '/friends/', 'facebook.com/?', 'facebook.com/home'];
 
     let isLogged = false;
     let isLoginScreen = false;
@@ -194,7 +203,7 @@ async function main() {
       }
       if (isLoginScreen) break;
 
-      // Check URL as fallback — sometimes Facebook redirects without showing form immediately
+      // Check URL as fallback
       const currentUrl = page.url();
       if (currentUrl.includes('login') || currentUrl.includes('checkpoint')) {
         isLoginScreen = true;
@@ -204,12 +213,22 @@ async function main() {
       await sleep(500);
     }
 
-    // Final fallback: re-check URL if polling ended inconclusive
+    // Final fallback: URL heuristic — if still on plain facebook.com/ and not logged in, it's a login page
     if (!isLogged && !isLoginScreen) {
       const finalUrl = page.url();
-      if (finalUrl.includes('login.php') || finalUrl.includes('checkpoint')) {
+      // Check if URL looks like a plain facebook landing (no feed paths)
+      const looksLikeLoginUrl = (
+        finalUrl.includes('login.php') ||
+        finalUrl.includes('checkpoint') ||
+        finalUrl === 'https://www.facebook.com/' ||
+        finalUrl === 'https://facebook.com/' ||
+        finalUrl.endsWith('facebook.com') ||
+        finalUrl.endsWith('facebook.com/')
+      );
+      const looksLikeLoggedIn = loggedInUrlPatterns.some(p => finalUrl.includes(p));
+      if (looksLikeLoginUrl && !looksLikeLoggedIn) {
         isLoginScreen = true;
-        console.log('Detected login page from URL fallback.');
+        console.log('Detected login page from URL heuristic (plain facebook.com/).');
       }
     }
 
