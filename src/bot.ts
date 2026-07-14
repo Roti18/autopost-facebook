@@ -24,7 +24,8 @@ function loadLoginCredentials(): { email: string; password: string } | null {
   try {
     const raw = fs.readFileSync(configPath, 'utf8');
     // Strip BOM (U+FEFF) if present — common from Windows Notepad
-    const creds = JSON.parse(raw.replace(/^﻿/, ''));
+    const cleaned = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+    const creds = JSON.parse(cleaned);
     if (creds.email && creds.password) {
       return { email: creds.email, password: creds.password };
     }
@@ -163,7 +164,8 @@ async function main() {
       '[data-pagelet="left_nav"]'
     ];
 
-    // Broad login-page selectors — covers old form + new flow (Continue/Lanjutkan buttons)
+    // Broad login-page selectors — covers: classic email/password form, profile-picker (Continue as ...),
+    // and footer links like "Log in" / "Masuk"
     const loginSelectors = [
       'input#email',
       'input[name="email"]',
@@ -173,6 +175,10 @@ async function main() {
       'button:has-text("Lanjutkan")',
       'button:has-text("Log in")',
       'button:has-text("Masuk")',
+      'div[role="button"]:has-text("Continue")',
+      'div[role="button"]:has-text("Lanjutkan")',
+      'div[aria-label^="Continue "]',
+      'div[aria-label^="Lanjutkan sebagai "]',
       'a:has-text("Log in")',
       'a:has-text("Sign in")',
       'a:has-text("Masuk")',
@@ -253,35 +259,39 @@ async function main() {
           }
 
           // Step 2: Click "Continue" / "Log in" button (FB new flow)
+          // Handles both <button> and <div role="button"> (profile picker)
           const continueBtn = page.locator(
             'button:has-text("Continue"), ' +
+            'button:has-text("Lanjutkan"), ' +
             'button:has-text("Log in"), ' +
             'button:has-text("Masuk"), ' +
-            'button[name="login"]'
+            'button[name="login"], ' +
+            'div[aria-label^="Continue "], ' +
+            'div[aria-label^="Lanjutkan sebagai "]'
           ).first();
           if (await continueBtn.isVisible().catch(() => false)) {
             await continueBtn.click();
             console.log('Clicked Continue/Login button.');
-            await sleep(2000); // Wait for password form to appear
+            await sleep(3000); // Wait for password form to appear or login to complete
           }
 
-          // Step 3: Fill password (now should be visible)
+          // Step 3: Fill password (if visible after Continue step)
           const passInput = page.locator('input#pass, input[name="pass"], input[type="password"]').first();
-          if (await passInput.isVisible().catch(() => false)) {
+          if (await passInput.isVisible({ timeout: 3000 }).catch(() => false)) {
             await passInput.fill('');
             await passInput.type(creds.password, { delay: 80 });
             console.log('Auto-filled password from config.json.');
-          }
 
-          // Step 4: Click login if password form submitted
-          const loginBtn = page.locator(
-            'button:has-text("Log in"), ' +
-            'button:has-text("Masuk"), ' +
-            'button[name="login"]'
-          ).first();
-          if (await loginBtn.isVisible().catch(() => false)) {
-            await loginBtn.click();
-            console.log('Clicked final login button.');
+            // Step 4: Click login button after filling password
+            const loginBtn = page.locator(
+              'button:has-text("Log in"), ' +
+              'button:has-text("Masuk"), ' +
+              'button[name="login"]'
+            ).first();
+            if (await loginBtn.isVisible().catch(() => false)) {
+              await loginBtn.click();
+              console.log('Clicked final login button.');
+            }
           }
 
           console.log('\n>>> Credentials filled. Please solve the CAPTCHA / checkpoint manually in the browser if any. <<<\n');
