@@ -78,19 +78,15 @@ async function pasteContent(page: Page, locator: Locator, text: string) {
     const line = lines[i].trimEnd();
     if (line.length > 0) {
       await page.keyboard.type(line, { delay: 10 });
-    }
 
-    // Press Enter after each line except the last one
-    if (i < lines.length - 1) {
-      // If the original line was empty, we just press Enter (blank paragraph)
-      if (line.length === 0) {
-        await page.keyboard.press('Enter');
-        await sleep(50);
-      } else {
+      // Press Enter after each non-empty line except the last one
+      if (i < lines.length - 1) {
         await page.keyboard.press('Enter');
         await sleep(80);
       }
     }
+    // Empty lines (baris kosong di template) dilewati — tidak ditekan Enter
+    // supaya tidak bikin spasi dobel di Facebook post
   }
 
   console.log('Text typed successfully!');
