@@ -1,0 +1,5 @@
+Product Name 1
+https://example.com/product-link-1
+
+Product Name 2
+https://example.com/product-link-2

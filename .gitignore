@@ -7,3 +7,18 @@ facebook.db-journal
 *.log
 FAP-FacebookAutoPoster/
 config.json
+
+# Local configurations & data files
+groups.json
+groups.backup.json
+groups.test.json
+facebookElements.txt
+post_template.txt
+package-lock.json
+
+# Image assets
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
