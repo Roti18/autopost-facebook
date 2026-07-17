@@ -31,31 +31,41 @@ A Node.js and TypeScript automation script designed to post content to multiple 
    * `FB_USER_DATA_DIR`: Directory path to store browser session profiles.
    * `MIN_DELAY_SECONDS` and `MAX_DELAY_SECONDS`: Random delay constraints between group postings to mimic human behavior.
    * `POST_INTERVAL_MINUTES`: Minimum duration to wait before posting to the same group again.
-   * `POST_CONTENT`: The text template supporting Spintax (e.g., `{Hello|Hi} friends`).
-   * `IMAGE_PATH`: Path to an image file (optional, leave blank for text-only posts).
+   * `POST_TEMPLATE_PATH`: Path to the text template file (default: `post_template.txt`).
+   * `IMAGE_PATH`: Path to image files (multiple paths can be comma-separated, optional, leave blank for text-only posts).
 
-3. Add your target Facebook group links to the `groups.json` file in the root folder:
-   ```json
-   [
-     {
-       "name": "Group Name 1",
-       "url": "https://www.facebook.com/groups/ID_1/"
-     },
-     {
-       "name": "Group Name 2",
-       "url": "https://www.facebook.com/groups/ID_2/"
-     }
-   ]
+3. Create the `post_template.txt` file in the root directory based on the `post_template.example.txt` file, and write your post message inside:
+   ```bash
+   cp post_template.example.txt post_template.txt
    ```
+   > **Note:** The template supports Spintax formatting (e.g., `{Hello|Hi} friends!`) to randomly rotate variations of words or phrases, and is Git-ignored to prevent leaking your custom text.
 
-4. Create a `config.json` file in the root directory with your Facebook login credentials:
+4. Create the `groups.json` file in the root directory based on the `groups.example.json` file, and add your target Facebook group links:
+   ```bash
+   cp groups.example.json groups.json
+   ```
+   * Configure it like this:
+     ```json
+     [
+       {
+         "name": "Group Name 1",
+         "url": "https://www.facebook.com/groups/ID_1/"
+       },
+       {
+         "name": "Group Name 2",
+         "url": "https://www.facebook.com/groups/ID_2/"
+       }
+     ]
+     ```
+
+5. Create a `config.json` file in the root directory with your Facebook login credentials:
    ```json
    {
      "email": "your_email_or_phone",
      "password": "your_password"
    }
    ```
-   > **Note:** `config.json` is listed in `.gitignore` and will never be committed to version control. Keep it safe and do not share it.
+   > **Note:** `groups.json`, `post_template.txt`, and `config.json` are listed in `.gitignore` and will never be committed to version control. Keep them safe and do not share them.
 
 ## How to Run
 
