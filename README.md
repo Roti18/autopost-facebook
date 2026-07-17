@@ -58,12 +58,9 @@ A Node.js and TypeScript automation script designed to post content to multiple 
      ]
      ```
 
-5. Create a `config.json` file in the root directory with your Facebook login credentials:
-   ```json
-   {
-     "email": "your_email_or_phone",
-     "password": "your_password"
-   }
+5. Create the `config.json` file in the root directory based on the `config.example.json` file, and add your Facebook login credentials:
+   ```bash
+   cp config.example.json config.json
    ```
    > **Note:** `groups.json`, `post_template.txt`, and `config.json` are listed in `.gitignore` and will never be committed to version control. Keep them safe and do not share them.
 
